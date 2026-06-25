@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Ticket System</title>
+
+<style>
+body {
+  margin: 0;
+  font-family: Arial;
+  background: #f4f4f4;
+  color: #222;
+}
+
+.topbar {
+  background: white;
+  padding: 14px;
+  border-bottom: 1px solid #ddd;
+  display: flex;
+  justify-content: space-between;
+}
+
+.wrap {
+  max-width: 900px;
+  margin: 20px auto;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+.card {
+  background: white;
+  padding: 15px;
+  border-radius: 8px;
+  border: 1px solid #ddd;
+}
+
+.hidden { display: none; }
+
+input, button {
+  width: 100%;
+  padding: 8px;
+  margin-top: 8px;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+}
+
+#formArea {
+  margin-top: 12px;
+}
+
+.questionBox {
+  padding: 12px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  margin-bottom: 14px;
+  background: #fafafa;
+}
+
+.questionTitle {
+  font-weight: bold;
+  margin-bottom: 10px;
+}
+
+.toggleGroup {
+  display: flex;
+  gap: 10px;
+}
+
+.toggleBtn {
+  flex: 1;
+  padding: 10px;
+  text-align: center;
+  cursor: pointer;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+}
+
+.toggleBtn.activeV { background: #d4f7d4; border: 2px solid green; }
+.toggleBtn.activeX { background: #ffd6d6; border: 2px solid red; }
+
+.ticket {
+  border: 1px solid #ddd;
+  padding: 10px;
+  margin-top: 10px;
+  border-radius: 8px;
+  background: #fafafa;
+}
+
+.status.pending { color: orange; font-weight: bold; }
+.status.resolved { color: green; font-weight: bold; }
+.status.denied { color: red; font-weight: bold; }
+
+.adminBtns {
+  display: flex;
+  gap: 10px;
+  margin-top: 10px;
+}
+</style>
+</head>
+
+<body>
+
+<div class="topbar">
+  <div>Ticket System</div>
+  <div id="topRight"></div>
+</div>
+
+<div class="wrap">
+
+  <!-- LOGIN / REGISTER -->
+  <div class="card" id="authBox">
+    <h3>Login / Register</h3>
+    <input id="user" placeholder="Username">
+    <input id="pass" type="password" placeholder="Password">
+    <button onclick="register()">Register</button>
+    <button onclick="login()">Login</button>
+  </div>
+
+  <!-- TICKET AREA -->
+  <div class="card hidden" id="ticketBox">
+    <h3>Create Ticket</h3>
+    <input id="nameInput" placeholder="Your name">
+
+    <div id="formArea"></div>
+
+    <button onclick="submitTicket()">Send Ticket</button>
+  </div>
+
+  <!-- ADMIN -->
+  <div class="card hidden" id="adminBox">
+    <h3>FishHook Admin</h3>
+    <div id="adminTickets"></div>
+  </div>
+
+  <!-- USER STATUS -->
+  <div class="card hidden" id="statusBox">
+    <h3>My Tickets</h3>
+    <div id="myTickets"></div>
+  </div>
+
+</div>
+
+<script>
+const OWNER = "FishHook";
+
+let users = JSON.parse(localStorage.getItem("users") || "{}");
+let tickets = JSON.parse(localStorage.getItem("tickets") || "[]");
+
+let currentUser = localStorage.getItem("currentUser");
+
+/* AUTH */
+function register() {
+  const u = document.getElementById("user").value.trim();
+  const p = document.getElementById("pass").value.trim();
+
+  if (!u || !p) return alert("fill all");
+
+  if (users[u]) return alert("username already exists");
+
+  users[u] = { pass: p };
+  localStorage.setItem("users", JSON.stringify(users));
+
+  alert("registered");
+}
+
+function login() {
+  const u = document.getElementById("user").value.trim();
+  const p = document.getElementById("pass").value.trim();
+
+  if (!users[u] || users[u].pass !== p) return alert("wrong login");
+
+  currentUser = u;
+  localStorage.setItem("currentUser", u);
+
+  loadUI();
+}
+
+/* LOGOUT */
+function logout() {
+  localStorage.removeItem("currentUser");
+  location.reload();
+}
+
+/* QUESTIONS */
+const questions = [
+  { type: "onetoggle", text: "Do you need help?" }
+];
+
+/* BUILD FORM */
+function buildForm() {
+  const out = document.getElementById("formArea");
+  out.innerHTML = "";
+
+  questions.forEach((q) => {
+    const box = document.createElement("div");
+    box.className = "questionBox";
+
+    const title = document.createElement("div");
+    title.className = "questionTitle";
+    title.innerText = q.text;
+
+    box.appendChild(title);
+
+    let state = null;
+
+    const group = document.createElement("div");
+    group.className = "toggleGroup";
+
+    const yes = document.createElement("div");
+    yes.className = "toggleBtn";
+    yes.innerText = "✅";
+
+    const no = document.createElement("div");
+    no.className = "toggleBtn";
+    no.innerText = "❌";
+
+    yes.onclick = () => {
+      state = state === "yes" ? null : "yes";
+      yes.classList.toggle("activeV", state === "yes");
+      no.classList.remove("activeX");
+    };
+
+    no.onclick = () => {
+      state = state === "no" ? null : "no";
+      no.classList.toggle("activeX", state === "no");
+      yes.classList.remove("activeV");
+    };
+
+    box._getValue = () => state;
+
+    group.appendChild(yes);
+    group.appendChild(no);
+    box.appendChild(group);
+
+    out.appendChild(box);
+  });
+}
+
+/* SUBMIT */
+function submitTicket() {
+  const name = document.getElementById("nameInput").value.trim();
+  if (!name) return alert("name required");
+
+  const answers = [];
+
+  document.querySelectorAll(".questionBox").forEach((box, i) => {
+    answers.push({
+      q: questions[i].text,
+      a: box._getValue ? box._getValue() : null
+    });
+  });
+
+  tickets.push({
+    id: Date.now(),
+    user: currentUser,
+    name,
+    status: "pending",
+    answers
+  });
+
+  localStorage.setItem("tickets", JSON.stringify(tickets));
+
+  renderAll();
+}
+
+/* STATUS CHANGE */
+function setStatus(id, status) {
+  tickets = tickets.map(t => {
+    if (t.id === id) t.status = status;
+    return t;
+  });
+
+  localStorage.setItem("tickets", JSON.stringify(tickets));
+  renderAll();
+}
+
+/* ADMIN VIEW */
+function renderAdmin() {
+  const box = document.getElementById("adminTickets");
+  box.innerHTML = "";
+
+  tickets
+    .filter(t => t.status === "pending")
+    .forEach(t => {
+      const div = document.createElement("div");
+      div.className = "ticket";
+
+      div.innerHTML = `
+        <div class="status ${t.status}">PENDING</div>
+        <b>User:</b> ${t.name}
+      `;
+
+      t.answers.forEach(a => {
+        div.innerHTML += `<div>${a.q}: ${a.a}</div>`;
+      });
+
+      const btns = document.createElement("div");
+      btns.className = "adminBtns";
+
+      const res = document.createElement("button");
+      res.innerText = "Resolve";
+      res.onclick = () => setStatus(t.id, "resolved");
+
+      const den = document.createElement("button");
+      den.innerText = "Deny";
+      den.onclick = () => setStatus(t.id, "denied");
+
+      btns.appendChild(res);
+      btns.appendChild(den);
+      div.appendChild(btns);
+
+      box.appendChild(div);
+    });
+}
+
+/* USER VIEW */
+function renderUser() {
+  const box = document.getElementById("myTickets");
+  box.innerHTML = "";
+
+  tickets
+    .filter(t => t.user === currentUser)
+    .forEach(t => {
+      const div = document.createElement("div");
+      div.className = "ticket";
+
+      div.innerHTML = `
+        <div class="status ${t.status}">${t.status.toUpperCase()}</div>
+        <b>Name:</b> ${t.name}
+      `;
+
+      t.answers.forEach(a => {
+        div.innerHTML += `<div>${a.q}: ${a.a}</div>`;
+      });
+
+      box.appendChild(div);
+    });
+}
+
+/* MAIN UI */
+function renderAll() {
+  if (currentUser === OWNER) renderAdmin();
+  renderUser();
+}
+
+/* LOAD UI */
+function loadUI() {
+  document.getElementById("authBox").classList.add("hidden");
+  document.getElementById("ticketBox").classList.remove("hidden");
+  document.getElementById("statusBox").classList.remove("hidden");
+
+  if (currentUser === OWNER) {
+    document.getElementById("adminBox").classList.remove("hidden");
+  }
+
+  document.getElementById("topRight").innerHTML =
+    `Logged in as ${currentUser} <button onclick="logout()">Logout</button>`;
+
+  buildForm();
+  renderAll();
+}
+
+if (currentUser) loadUI();
+</script>
+
+</body>
+</html>
