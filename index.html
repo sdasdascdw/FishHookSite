@@ -73,11 +73,25 @@ input, button {
   text-align: center;
   cursor: pointer;
   border: 1px solid #ccc;
-  border-radius: 6px;
+  border-radius: 8px;
+  font-size: 18px;
+  background: white;
+  transition: 0.2s;
 }
 
-.toggleBtn.activeV { background: #d4f7d4; border: 2px solid green; }
-.toggleBtn.activeX { background: #ffd6d6; border: 2px solid red; }
+.toggleBtn:hover {
+  transform: scale(1.03);
+}
+
+.toggleBtn.activeV {
+  background: #d4f7d4;
+  border: 2px solid #2e7d32;
+}
+
+.toggleBtn.activeX {
+  background: #ffd6d6;
+  border: 2px solid #b71c1c;
+}
 
 .ticket {
   border: 1px solid #ddd;
@@ -87,9 +101,14 @@ input, button {
   background: #fafafa;
 }
 
-.status.pending { color: orange; font-weight: bold; }
-.status.resolved { color: green; font-weight: bold; }
-.status.denied { color: red; font-weight: bold; }
+.status {
+  font-weight: bold;
+  margin-bottom: 8px;
+}
+
+.status.pending { color: orange; }
+.status.resolved { color: green; }
+.status.denied { color: red; }
 
 .adminBtns {
   display: flex;
@@ -117,7 +136,7 @@ input, button {
     <button onclick="login()">Login</button>
   </div>
 
-  <!-- CREATE TICKET -->
+  <!-- CREATE -->
   <div class="card hidden" id="ticketBox">
     <h3>Create Ticket</h3>
     <input id="nameInput" placeholder="Your name">
@@ -152,7 +171,7 @@ function register() {
   const p = pass.value.trim();
 
   if (!u || !p) return alert("fill all");
-  if (users[u]) return alert("username already exists");
+  if (users[u]) return alert("username exists");
 
   users[u] = { pass: p };
   localStorage.setItem("users", JSON.stringify(users));
@@ -179,7 +198,7 @@ function logout() {
 
 /* QUESTIONS */
 const questions = [
-  { type: "onetoggle", text: "Do you need help?" }
+  { text: "Do you need help?" }
 ];
 
 /* FORM */
@@ -200,6 +219,7 @@ function buildForm() {
     let state = null;
 
     const group = document.createElement("div");
+    group.className = "toggleGroup";
 
     const yes = document.createElement("div");
     yes.className = "toggleBtn";
@@ -233,7 +253,7 @@ function buildForm() {
 
 /* SUBMIT */
 function submitTicket() {
-  const name = document.getElementById("nameInput").value.trim();
+  const name = nameInput.value.trim();
   if (!name) return alert("name required");
 
   const answers = [];
@@ -241,7 +261,7 @@ function submitTicket() {
   document.querySelectorAll(".questionBox").forEach((box, i) => {
     answers.push({
       q: questions[i].text,
-      a: box._getValue ? box._getValue() : null
+      a: box._getValue()
     });
   });
 
@@ -255,20 +275,15 @@ function submitTicket() {
 
   localStorage.setItem("tickets", JSON.stringify(tickets));
 
-  document.getElementById("nameInput").value = "";
+  nameInput.value = "";
 
   renderAll();
 }
 
 /* STATUS */
 function setStatus(id, status) {
-  tickets = tickets.map(t => {
-    if (t.id === id) t.status = status;
-    return t;
-  });
-
+  tickets = tickets.map(t => t.id === id ? { ...t, status } : t);
   localStorage.setItem("tickets", JSON.stringify(tickets));
-
   renderAll();
 }
 
@@ -295,16 +310,16 @@ function renderAdmin() {
       const btns = document.createElement("div");
       btns.className = "adminBtns";
 
-      const res = document.createElement("button");
-      res.innerText = "Resolve";
-      res.onclick = () => setStatus(t.id, "resolved");
+      const r = document.createElement("button");
+      r.innerText = "Resolve";
+      r.onclick = () => setStatus(t.id, "resolved");
 
-      const den = document.createElement("button");
-      den.innerText = "Deny";
-      den.onclick = () => setStatus(t.id, "denied");
+      const d = document.createElement("button");
+      d.innerText = "Deny";
+      d.onclick = () => setStatus(t.id, "denied");
 
-      btns.appendChild(res);
-      btns.appendChild(den);
+      btns.appendChild(r);
+      btns.appendChild(d);
 
       div.appendChild(btns);
       box.appendChild(div);
@@ -335,7 +350,7 @@ function renderUser() {
     });
 }
 
-/* RENDER ALL */
+/* RENDER */
 function renderAll() {
   renderUser();
 
