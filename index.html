@@ -108,7 +108,7 @@ input, button {
 
 <div class="wrap">
 
-  <!-- LOGIN / REGISTER -->
+  <!-- AUTH -->
   <div class="card" id="authBox">
     <h3>Login / Register</h3>
     <input id="user" placeholder="Username">
@@ -117,13 +117,11 @@ input, button {
     <button onclick="login()">Login</button>
   </div>
 
-  <!-- TICKET AREA -->
+  <!-- CREATE TICKET -->
   <div class="card hidden" id="ticketBox">
     <h3>Create Ticket</h3>
     <input id="nameInput" placeholder="Your name">
-
     <div id="formArea"></div>
-
     <button onclick="submitTicket()">Send Ticket</button>
   </div>
 
@@ -133,7 +131,7 @@ input, button {
     <div id="adminTickets"></div>
   </div>
 
-  <!-- USER STATUS -->
+  <!-- USER -->
   <div class="card hidden" id="statusBox">
     <h3>My Tickets</h3>
     <div id="myTickets"></div>
@@ -146,16 +144,14 @@ const OWNER = "FishHook";
 
 let users = JSON.parse(localStorage.getItem("users") || "{}");
 let tickets = JSON.parse(localStorage.getItem("tickets") || "[]");
-
 let currentUser = localStorage.getItem("currentUser");
 
 /* AUTH */
 function register() {
-  const u = document.getElementById("user").value.trim();
-  const p = document.getElementById("pass").value.trim();
+  const u = user.value.trim();
+  const p = pass.value.trim();
 
   if (!u || !p) return alert("fill all");
-
   if (users[u]) return alert("username already exists");
 
   users[u] = { pass: p };
@@ -165,8 +161,8 @@ function register() {
 }
 
 function login() {
-  const u = document.getElementById("user").value.trim();
-  const p = document.getElementById("pass").value.trim();
+  const u = user.value.trim();
+  const p = pass.value.trim();
 
   if (!users[u] || users[u].pass !== p) return alert("wrong login");
 
@@ -176,7 +172,6 @@ function login() {
   loadUI();
 }
 
-/* LOGOUT */
 function logout() {
   localStorage.removeItem("currentUser");
   location.reload();
@@ -187,7 +182,7 @@ const questions = [
   { type: "onetoggle", text: "Do you need help?" }
 ];
 
-/* BUILD FORM */
+/* FORM */
 function buildForm() {
   const out = document.getElementById("formArea");
   out.innerHTML = "";
@@ -205,7 +200,6 @@ function buildForm() {
     let state = null;
 
     const group = document.createElement("div");
-    group.className = "toggleGroup";
 
     const yes = document.createElement("div");
     yes.className = "toggleBtn";
@@ -261,10 +255,12 @@ function submitTicket() {
 
   localStorage.setItem("tickets", JSON.stringify(tickets));
 
+  document.getElementById("nameInput").value = "";
+
   renderAll();
 }
 
-/* STATUS CHANGE */
+/* STATUS */
 function setStatus(id, status) {
   tickets = tickets.map(t => {
     if (t.id === id) t.status = status;
@@ -272,10 +268,11 @@ function setStatus(id, status) {
   });
 
   localStorage.setItem("tickets", JSON.stringify(tickets));
+
   renderAll();
 }
 
-/* ADMIN VIEW */
+/* ADMIN */
 function renderAdmin() {
   const box = document.getElementById("adminTickets");
   box.innerHTML = "";
@@ -287,7 +284,7 @@ function renderAdmin() {
       div.className = "ticket";
 
       div.innerHTML = `
-        <div class="status ${t.status}">PENDING</div>
+        <div class="status pending">PENDING</div>
         <b>User:</b> ${t.name}
       `;
 
@@ -308,13 +305,13 @@ function renderAdmin() {
 
       btns.appendChild(res);
       btns.appendChild(den);
-      div.appendChild(btns);
 
+      div.appendChild(btns);
       box.appendChild(div);
     });
 }
 
-/* USER VIEW */
+/* USER */
 function renderUser() {
   const box = document.getElementById("myTickets");
   box.innerHTML = "";
@@ -338,23 +335,23 @@ function renderUser() {
     });
 }
 
-/* MAIN UI */
+/* RENDER ALL */
 function renderAll() {
-  if (currentUser === OWNER) renderAdmin();
   renderUser();
-}
-
-/* LOAD UI */
-function loadUI() {
-  document.getElementById("authBox").classList.add("hidden");
-  document.getElementById("ticketBox").classList.remove("hidden");
-  document.getElementById("statusBox").classList.remove("hidden");
 
   if (currentUser === OWNER) {
-    document.getElementById("adminBox").classList.remove("hidden");
+    adminBox.classList.remove("hidden");
+    renderAdmin();
   }
+}
 
-  document.getElementById("topRight").innerHTML =
+/* LOAD */
+function loadUI() {
+  authBox.classList.add("hidden");
+  ticketBox.classList.remove("hidden");
+  statusBox.classList.remove("hidden");
+
+  topRight.innerHTML =
     `Logged in as ${currentUser} <button onclick="logout()">Logout</button>`;
 
   buildForm();
