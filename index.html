@@ -127,7 +127,6 @@ input, button {
 
 <div class="wrap">
 
-  <!-- AUTH -->
   <div class="card" id="authBox">
     <h3>Login / Register</h3>
     <input id="user" placeholder="Username">
@@ -136,7 +135,6 @@ input, button {
     <button onclick="login()">Login</button>
   </div>
 
-  <!-- CREATE -->
   <div class="card hidden" id="ticketBox">
     <h3>Create Ticket</h3>
     <input id="nameInput" placeholder="Your name">
@@ -144,13 +142,11 @@ input, button {
     <button onclick="submitTicket()">Send Ticket</button>
   </div>
 
-  <!-- ADMIN -->
   <div class="card hidden" id="adminBox">
     <h3>FishHook Admin</h3>
     <div id="adminTickets"></div>
   </div>
 
-  <!-- USER -->
   <div class="card hidden" id="statusBox">
     <h3>My Tickets</h3>
     <div id="myTickets"></div>
@@ -161,11 +157,19 @@ input, button {
 <script>
 const OWNER = "FishHook";
 
+const authBox = document.getElementById("authBox");
+const ticketBox = document.getElementById("ticketBox");
+const adminBox = document.getElementById("adminBox");
+const statusBox = document.getElementById("statusBox");
+const topRight = document.getElementById("topRight");
+const nameInput = document.getElementById("nameInput");
+const user = document.getElementById("user");
+const pass = document.getElementById("pass");
+
 let users = JSON.parse(localStorage.getItem("users") || "{}");
 let tickets = JSON.parse(localStorage.getItem("tickets") || "[]");
 let currentUser = localStorage.getItem("currentUser");
 
-/* AUTH */
 function register() {
   const u = user.value.trim();
   const p = pass.value.trim();
@@ -196,12 +200,10 @@ function logout() {
   location.reload();
 }
 
-/* QUESTIONS */
 const questions = [
   { text: "Do you need help?" }
 ];
 
-/* FORM */
 function buildForm() {
   const out = document.getElementById("formArea");
   out.innerHTML = "";
@@ -213,8 +215,6 @@ function buildForm() {
     const title = document.createElement("div");
     title.className = "questionTitle";
     title.innerText = q.text;
-
-    box.appendChild(title);
 
     let state = null;
 
@@ -245,13 +245,13 @@ function buildForm() {
 
     group.appendChild(yes);
     group.appendChild(no);
-    box.appendChild(group);
 
+    box.appendChild(title);
+    box.appendChild(group);
     out.appendChild(box);
   });
 }
 
-/* SUBMIT */
 function submitTicket() {
   const name = nameInput.value.trim();
   if (!name) return alert("name required");
@@ -280,94 +280,86 @@ function submitTicket() {
   renderAll();
 }
 
-/* STATUS */
 function setStatus(id, status) {
   tickets = tickets.map(t => t.id === id ? { ...t, status } : t);
   localStorage.setItem("tickets", JSON.stringify(tickets));
   renderAll();
 }
 
-/* ADMIN */
 function renderAdmin() {
   const box = document.getElementById("adminTickets");
   box.innerHTML = "";
 
-  tickets
-    .filter(t => t.status === "pending")
-    .forEach(t => {
-      const div = document.createElement("div");
-      div.className = "ticket";
+  tickets.forEach(t => {
+    const div = document.createElement("div");
+    div.className = "ticket";
 
-      div.innerHTML = `
-        <div class="status pending">PENDING</div>
-        <b>User:</b> ${t.name}
-      `;
+    div.innerHTML = `
+      <div class="status ${t.status}">${t.status.toUpperCase()}</div>
+      <b>User:</b> ${t.name}
+    `;
 
-      t.answers.forEach(a => {
-        div.innerHTML += `<div>${a.q}: ${a.a}</div>`;
-      });
-
-      const btns = document.createElement("div");
-      btns.className = "adminBtns";
-
-      const r = document.createElement("button");
-      r.innerText = "Resolve";
-      r.onclick = () => setStatus(t.id, "resolved");
-
-      const d = document.createElement("button");
-      d.innerText = "Deny";
-      d.onclick = () => setStatus(t.id, "denied");
-
-      btns.appendChild(r);
-      btns.appendChild(d);
-
-      div.appendChild(btns);
-      box.appendChild(div);
+    t.answers.forEach(a => {
+      div.innerHTML += `<div>${a.q}: ${a.a}</div>`;
     });
+
+    const btns = document.createElement("div");
+    btns.className = "adminBtns";
+
+    const r = document.createElement("button");
+    r.innerText = "Resolve";
+    r.onclick = () => setStatus(t.id, "resolved");
+
+    const d = document.createElement("button");
+    d.innerText = "Deny";
+    d.onclick = () => setStatus(t.id, "denied");
+
+    btns.appendChild(r);
+    btns.appendChild(d);
+
+    div.appendChild(btns);
+    box.appendChild(div);
+  });
 }
 
-/* USER */
 function renderUser() {
   const box = document.getElementById("myTickets");
   box.innerHTML = "";
 
-  tickets
-    .filter(t => t.user === currentUser)
-    .forEach(t => {
-      const div = document.createElement("div");
-      div.className = "ticket";
+  tickets.filter(t => t.user === currentUser).forEach(t => {
+    const div = document.createElement("div");
+    div.className = "ticket";
 
-      div.innerHTML = `
-        <div class="status ${t.status}">${t.status.toUpperCase()}</div>
-        <b>Name:</b> ${t.name}
-      `;
+    div.innerHTML = `
+      <div class="status ${t.status}">${t.status.toUpperCase()}</div>
+      <b>Name:</b> ${t.name}
+    `;
 
-      t.answers.forEach(a => {
-        div.innerHTML += `<div>${a.q}: ${a.a}</div>`;
-      });
-
-      box.appendChild(div);
+    t.answers.forEach(a => {
+      div.innerHTML += `<div>${a.q}: ${a.a}</div>`;
     });
+
+    box.appendChild(div);
+  });
 }
 
-/* RENDER */
 function renderAll() {
   renderUser();
 
   if (currentUser === OWNER) {
     adminBox.classList.remove("hidden");
     renderAdmin();
+  } else {
+    adminBox.classList.add("hidden");
   }
 }
 
-/* LOAD */
 function loadUI() {
   authBox.classList.add("hidden");
   ticketBox.classList.remove("hidden");
   statusBox.classList.remove("hidden");
 
-  topRight.innerHTML =
-    `Logged in as ${currentUser} <button onclick="logout()">Logout</button>`;
+  topRight.innerHTML = `Logged in as ${currentUser} <button onclick="logout()">Logout</button>`;
 
   buildForm();
   renderAll();
