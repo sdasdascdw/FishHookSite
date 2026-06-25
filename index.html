@@ -115,6 +115,12 @@ input, button {
   gap: 10px;
   margin-top: 10px;
 }
+
+.note {
+  font-size: 12px;
+  color: #888;
+  margin-top: 6px;
+}
 </style>
 </head>
 
@@ -133,6 +139,7 @@ input, button {
     <input id="pass" type="password" placeholder="Password">
     <button onclick="register()">Register</button>
     <button onclick="login()">Login</button>
+    <div class="note">Username must be at least 4 characters. Password at least 6.</div>
   </div>
 
   <div class="card hidden" id="ticketBox">
@@ -154,8 +161,48 @@ input, button {
 
 </div>
 
-<script>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import {
+  getAuth,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  onAuthStateChanged,
+  signOut,
+  updateProfile
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import {
+  getFirestore,
+  collection,
+  addDoc,
+  doc,
+  updateDoc,
+  onSnapshot,
+  query,
+  orderBy
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+// ====================================================================
+// PASTE YOUR OWN FIREBASE CONFIG HERE
+// (Firebase console -> Project settings -> General -> Your apps -> SDK setup)
+// ====================================================================
+const firebaseConfig = {
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT.firebaseapp.com",
+  projectId: "YOUR_PROJECT",
+  storageBucket: "YOUR_PROJECT.appspot.com",
+  messagingSenderId: "YOUR_SENDER_ID",
+  appId: "YOUR_APP_ID"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
 const OWNER = "FishHook";
+// Firebase Auth needs an email address, so usernames are mapped to a fake
+// email under this domain. Users never see this, they just type a username.
+const FAKE_EMAIL_DOMAIN = "@ticketapp.local";
 
 const authBox = document.getElementById("authBox");
 const ticketBox = document.getElementById("ticketBox");
@@ -163,44 +210,56 @@ const adminBox = document.getElementById("adminBox");
 const statusBox = document.getElementById("statusBox");
 const topRight = document.getElementById("topRight");
 const nameInput = document.getElementById("nameInput");
-const user = document.getElementById("user");
-const pass = document.getElementById("pass");
+const userInput = document.getElementById("user");
+const passInput = document.getElementById("pass");
 
-let users = JSON.parse(localStorage.getItem("users") || "{}");
-let tickets = JSON.parse(localStorage.getItem("tickets") || "[]");
-let currentUser = localStorage.getItem("currentUser");
+let currentUsername = null;
+let allTickets = []; // kept in sync live via onSnapshot
 
-function register() {
-  const u = user.value.trim();
-  const p = pass.value.trim();
+function usernameToEmail(u) {
+  return u.toLowerCase() + FAKE_EMAIL_DOMAIN;
+}
+
+window.register = async function () {
+  const u = userInput.value.trim();
+  const p = passInput.value.trim();
+
+  if (u.length < 4) return alert("username must be at least 4 characters");
+  if (p.length < 6) return alert("password must be at least 6 characters");
+
+  try {
+    const cred = await createUserWithEmailAndPassword(auth, usernameToEmail(u), p);
+    await updateProfile(cred.user, { displayName: u });
+    alert("registered! now click Login.");
+  } catch (err) {
+    alert(friendlyError(err));
+  }
+};
+
+window.login = async function () {
+  const u = userInput.value.trim();
+  const p = passInput.value.trim();
 
   if (!u || !p) return alert("fill all");
 
-  reloadData();
-  if (users[u]) return alert("username exists");
+  try {
+    await signInWithEmailAndPassword(auth, usernameToEmail(u), p);
+    // onAuthStateChanged below handles the rest
+  } catch (err) {
+    alert(friendlyError(err));
+  }
+};
 
-  users[u] = { pass: p };
-  localStorage.setItem("users", JSON.stringify(users));
+window.logout = async function () {
+  await signOut(auth);
+};
 
-  alert("registered");
-}
-
-function login() {
-  const u = user.value.trim();
-  const p = pass.value.trim();
-
-  reloadData();
-  if (!users[u] || users[u].pass !== p) return alert("wrong login");
-
-  currentUser = u;
-  localStorage.setItem("currentUser", u);
-
-  loadUI();
-}
-
-function logout() {
-  localStorage.removeItem("currentUser");
-  location.reload();
+function friendlyError(err) {
+  const code = err.code || "";
+  if (code.includes("email-already-in-use")) return "username already taken";
+  if (code.includes("invalid-credential") || code.includes("wrong-password") || code.includes("user-not-found")) return "wrong login";
+  if (code.includes("weak-password")) return "password too weak";
+  return err.message || "something went wrong";
 }
 
 const questions = [
@@ -255,14 +314,11 @@ function buildForm() {
   });
 }
 
-function submitTicket() {
+window.submitTicket = async function () {
   const name = nameInput.value.trim();
   if (!name) return alert("name required");
 
-  reloadData();
-
   const answers = [];
-
   document.querySelectorAll(".questionBox").forEach((box, i) => {
     answers.push({
       q: questions[i].text,
@@ -270,43 +326,34 @@ function submitTicket() {
     });
   });
 
-  tickets.push({
-    id: Date.now(),
-    user: currentUser,
-    name,
-    status: "pending",
-    answers
-  });
+  try {
+    await addDoc(collection(db, "tickets"), {
+      user: currentUsername,
+      name,
+      status: "pending",
+      answers,
+      createdAt: Date.now()
+    });
+    nameInput.value = "";
+    buildForm(); // reset toggles
+  } catch (err) {
+    alert("could not submit ticket: " + err.message);
+  }
+};
 
-  localStorage.setItem("tickets", JSON.stringify(tickets));
-
-  nameInput.value = "";
-
-  renderAll();
-}
-
-function setStatus(id, status) {
-  reloadData();
-  tickets = tickets.map(t => t.id === id ? { ...t, status } : t);
-  localStorage.setItem("tickets", JSON.stringify(tickets));
-  renderAll();
-}
-
-// Re-read the latest data from localStorage. Needed because each open tab
-// keeps its own copy of `users`/`tickets` in memory, and that copy goes
-// stale the moment a *different* tab (e.g. a customer submitting a ticket)
-// writes new data. Without this, the admin tab keeps showing whatever it
-// had at page-load time and new tickets never seem to "arrive".
-function reloadData() {
-  users = JSON.parse(localStorage.getItem("users") || "{}");
-  tickets = JSON.parse(localStorage.getItem("tickets") || "[]");
-}
+window.setStatus = async function (id, status) {
+  try {
+    await updateDoc(doc(db, "tickets", id), { status });
+  } catch (err) {
+    alert("could not update ticket: " + err.message);
+  }
+};
 
 function renderAdmin() {
   const box = document.getElementById("adminTickets");
   box.innerHTML = "";
 
-  tickets.forEach(t => {
+  allTickets.forEach(t => {
     const div = document.createElement("div");
     div.className = "ticket";
 
@@ -324,11 +371,11 @@ function renderAdmin() {
 
     const r = document.createElement("button");
     r.innerText = "Resolve";
-    r.onclick = () => setStatus(t.id, "resolved");
+    r.onclick = () => window.setStatus(t.id, "resolved");
 
     const d = document.createElement("button");
     d.innerText = "Deny";
-    d.onclick = () => setStatus(t.id, "denied");
+    d.onclick = () => window.setStatus(t.id, "denied");
 
     btns.appendChild(r);
     btns.appendChild(d);
@@ -342,7 +389,7 @@ function renderUser() {
   const box = document.getElementById("myTickets");
   box.innerHTML = "";
 
-  tickets.filter(t => t.user === currentUser).forEach(t => {
+  allTickets.filter(t => t.user === currentUsername).forEach(t => {
     const div = document.createElement("div");
     div.className = "ticket";
 
@@ -360,10 +407,9 @@ function renderUser() {
 }
 
 function renderAll() {
-  reloadData();
   renderUser();
 
-  if (currentUser === OWNER) {
+  if (currentUsername === OWNER) {
     adminBox.classList.remove("hidden");
     renderAdmin();
   } else {
@@ -371,25 +417,56 @@ function renderAll() {
   }
 }
 
+let unsubscribeTickets = null;
+
+function startTicketListener() {
+  const q = query(collection(db, "tickets"), orderBy("createdAt", "desc"));
+  unsubscribeTickets = onSnapshot(q, (snapshot) => {
+    allTickets = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderAll();
+  }, (err) => {
+    console.error("ticket listener error", err);
+  });
+}
+
 function loadUI() {
   authBox.classList.add("hidden");
   ticketBox.classList.remove("hidden");
   statusBox.classList.remove("hidden");
 
-  topRight.innerHTML = `Logged in as ${currentUser} <button onclick="logout()">Logout</button>`;
+  topRight.innerHTML = "";
+  const label = document.createElement("span");
+  label.innerText = `Logged in as ${currentUsername} `;
+  const logoutBtn = document.createElement("button");
+  logoutBtn.innerText = "Logout";
+  logoutBtn.style.width = "auto";
+  logoutBtn.onclick = () => window.logout();
+  topRight.appendChild(label);
+  topRight.appendChild(logoutBtn);
 
   buildForm();
-  renderAll();
+  startTicketListener(); // real-time: updates instantly for everyone, every device
 }
 
-if (currentUser) loadUI();
+function unloadUI() {
+  authBox.classList.remove("hidden");
+  ticketBox.classList.add("hidden");
+  adminBox.classList.add("hidden");
+  statusBox.classList.add("hidden");
+  topRight.innerHTML = "";
+  if (unsubscribeTickets) {
+    unsubscribeTickets();
+    unsubscribeTickets = null;
+  }
+}
 
-// Live sync: when another tab writes to localStorage (e.g. a user submits
-// a ticket, or the admin resolves one), this tab gets notified immediately
-// and can re-render with the fresh data — no manual refresh needed.
-window.addEventListener("storage", (e) => {
-  if (e.key === "tickets" || e.key === "users") {
-    if (currentUser) renderAll();
+onAuthStateChanged(auth, (firebaseUser) => {
+  if (firebaseUser) {
+    currentUsername = firebaseUser.displayName || firebaseUser.email.split("@")[0];
+    loadUI();
+  } else {
+    currentUsername = null;
+    unloadUI();
   }
 });
 </script>
