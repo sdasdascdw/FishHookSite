@@ -175,6 +175,8 @@ function register() {
   const p = pass.value.trim();
 
   if (!u || !p) return alert("fill all");
+
+  reloadData();
   if (users[u]) return alert("username exists");
 
   users[u] = { pass: p };
@@ -187,6 +189,7 @@ function login() {
   const u = user.value.trim();
   const p = pass.value.trim();
 
+  reloadData();
   if (!users[u] || users[u].pass !== p) return alert("wrong login");
 
   currentUser = u;
@@ -256,6 +259,8 @@ function submitTicket() {
   const name = nameInput.value.trim();
   if (!name) return alert("name required");
 
+  reloadData();
+
   const answers = [];
 
   document.querySelectorAll(".questionBox").forEach((box, i) => {
@@ -281,9 +286,20 @@ function submitTicket() {
 }
 
 function setStatus(id, status) {
+  reloadData();
   tickets = tickets.map(t => t.id === id ? { ...t, status } : t);
   localStorage.setItem("tickets", JSON.stringify(tickets));
   renderAll();
+}
+
+// Re-read the latest data from localStorage. Needed because each open tab
+// keeps its own copy of `users`/`tickets` in memory, and that copy goes
+// stale the moment a *different* tab (e.g. a customer submitting a ticket)
+// writes new data. Without this, the admin tab keeps showing whatever it
+// had at page-load time and new tickets never seem to "arrive".
+function reloadData() {
+  users = JSON.parse(localStorage.getItem("users") || "{}");
+  tickets = JSON.parse(localStorage.getItem("tickets") || "[]");
 }
 
 function renderAdmin() {
@@ -344,6 +360,7 @@ function renderUser() {
 }
 
 function renderAll() {
+  reloadData();
   renderUser();
 
   if (currentUser === OWNER) {
@@ -366,6 +383,15 @@ function loadUI() {
 }
 
 if (currentUser) loadUI();
+
+// Live sync: when another tab writes to localStorage (e.g. a user submits
+// a ticket, or the admin resolves one), this tab gets notified immediately
+// and can re-render with the fresh data — no manual refresh needed.
+window.addEventListener("storage", (e) => {
+  if (e.key === "tickets" || e.key === "users") {
+    if (currentUser) renderAll();
+  }
+});
 </script>
 
 </body>
